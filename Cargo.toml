@@ -1,0 +1,22 @@
+[workspace]
+# let members inline
+members          = ["package", "contracts/otc"]
+
+[workspace.package]
+version          = "0.1.0"
+edition          = "2021"
+authors          = ["Giacomo Encicliati <Giacomo.encicliati@gmail.com>"]
+
+
+[workspace.dependencies]
+cosmwasm-schema  = "1.3.0"
+cosmwasm-std     = "1.3.0"
+cw-storage-plus  = "1.1.0"
+cw2              = "1.0.1"
+schemars         = "0.8.10"
+serde            = { version = "1.0.145", default-features = false, features = ["derive"] }
+thiserror        = "1.0.31"
+rhaki-cw-plus    = "0.6.5"
+cosmwasm_otc-pkg = { path = "./package", version = "0.1.0"}
+
+cw-multi-test    = "0.16.5"
