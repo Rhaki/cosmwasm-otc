@@ -1,12 +1,12 @@
 pub mod msgs {
     use cosmwasm_schema::{cw_serde, QueryResponses};
 
-    use super::definitions::{OtcItem, OtcPosition};
+    use super::definitions::{OtcItemInfo, OtcPosition};
 
     #[cw_serde]
     pub struct InstantiateMsg {
         pub owner: String,
-        pub fee: Vec<OtcItem>,
+        pub fee: Vec<OtcItemInfo>,
         pub fee_collector: String,
     }
 
@@ -14,19 +14,24 @@ pub mod msgs {
     pub enum ExecuteMsg {
         CreateOtc(CreateOtcMsg),
         ExecuteOtc(ExecuteOtcMsg),
+        ClaimOtc(ClaimOtcMsg),
         CancelOtc(CancelOtcMsg),
     }
 
     #[cw_serde]
     pub struct CreateOtcMsg {
         pub dealer: Option<String>,
-        pub offer: Vec<OtcItem>,
-        pub ask: Vec<OtcItem>,
-        pub expiration_time: Option<u64>,
+        pub offer: Vec<OtcItemRegistration>,
+        pub ask: Vec<OtcItemRegistration>,
     }
 
     #[cw_serde]
     pub struct ExecuteOtcMsg {
+        pub id: u64,
+    }
+
+    #[cw_serde]
+    pub struct ClaimOtcMsg {
         pub id: u64,
     }
 
@@ -80,22 +85,36 @@ pub mod msgs {
 
     #[cw_serde]
     pub struct MigrateMsg {}
+
+    #[cw_serde]
+    pub struct VestingInfoRegistration {
+        pub cliff: Option<u64>,
+        pub vesting: Option<u64>,
+    }
+
+    #[cw_serde]
+    pub struct OtcItemRegistration {
+        pub info: OtcItemInfo,
+        pub vesting: Option<VestingInfoRegistration>,
+    }
 }
 
 pub mod definitions {
-    use std::collections::HashMap;
+    use std::cmp::min;
 
     use cosmwasm_schema::cw_serde;
-    use cosmwasm_std::{Addr, Coin, CosmosMsg, Deps, StdError, StdResult, Uint128, WasmMsg};
+    use cosmwasm_std::{
+        Addr, BankMsg, Coin, CosmosMsg, Decimal, Deps, Env, StdError, StdResult, Uint128, WasmMsg,
+    };
     use rhaki_cw_plus::{traits::IntoAddr, wasm::WasmMsgBuilder};
 
-    use super::msgs::CreateOtcMsg;
+    use super::msgs::{CreateOtcMsg, OtcItemRegistration, VestingInfoRegistration};
 
     #[cw_serde]
     pub struct Config {
         pub owner: Addr,
         pub counter_otc: u64,
-        pub fee: Vec<OtcItem>,
+        pub fee: Vec<OtcItemInfo>,
         pub fee_collector: Addr,
     }
 
@@ -103,7 +122,7 @@ pub mod definitions {
         pub fn new(
             deps: Deps,
             owner: Addr,
-            fee: Vec<OtcItem>,
+            fee: Vec<OtcItemInfo>,
             fee_collector: Addr,
         ) -> StdResult<Config> {
             for i in &fee {
@@ -120,22 +139,190 @@ pub mod definitions {
     }
 
     #[cw_serde]
-    pub enum OtcItem {
+    pub struct OtcItem {
+        pub item_info: OtcItemInfo,
+        pub vesting_info: Option<VestingInfo>,
+    }
+
+    impl OtcItem {
+        pub fn validate(&self, deps: Deps) -> StdResult<()> {
+            if let Some(vesting) = &self.vesting_info {
+                vesting.validate()?
+            }
+            self.item_info.validate(deps)
+        }
+
+        pub fn sendable_amount_and_update_claimed_amount(
+            &mut self,
+            env: &Env,
+            position_status: &OtcPositionStatus,
+        ) -> StdResult<Uint128> {
+            match &mut self.vesting_info {
+                Some(vesting_info) => {
+                    let max_amount = self.item_info.get_amount();
+                    let vesting_start = position_status.get_vesting_start()?;
+                    let mut delta = env.block.time.seconds() - vesting_start;
+
+                    let cliff_window = if let Some(cliff) = vesting_info.cliff {
+                        if cliff >= delta {
+                            return Ok(Uint128::zero());
+                        }
+                        cliff
+                    } else {
+                        0
+                    };
+
+                    delta -= cliff_window;
+
+                    let unchecked_claimable_amount = if let Some(vesting_window) =
+                        vesting_info.vesting
+                    {
+                        max_amount * Decimal::from_ratio(min(delta, vesting_window), vesting_window)
+                    } else {
+                        max_amount
+                    };
+
+                    let claimabile_amount = unchecked_claimable_amount - vesting_info.claimed;
+
+                    vesting_info.claimed += claimabile_amount;
+
+                    Ok(claimabile_amount)
+                }
+                None => Ok(self.item_info.get_amount()),
+            }
+        }
+    }
+
+    impl From<OtcItemRegistration> for OtcItem {
+        fn from(value: OtcItemRegistration) -> Self {
+            OtcItem {
+                item_info: value.info,
+                vesting_info: value.vesting.map(|val| val.into()),
+            }
+        }
+    }
+
+    #[cw_serde]
+    pub struct VestingInfo {
+        pub cliff: Option<u64>,
+        pub vesting: Option<u64>,
+        pub claimed: Uint128,
+    }
+
+    impl VestingInfo {
+        pub fn validate(&self) -> StdResult<()> {
+            if self.cliff.is_none() && self.vesting.is_none() {
+                return Err(StdError::generic_err(
+                    "VestingInfo must have a vesting or cliff info",
+                ));
+            }
+
+            if let Some(vesting) = self.vesting {
+                if vesting != 0 {
+                    return Err(StdError::generic_err("Vesting must be > 0"));
+                }
+            }
+
+            if let Some(cliff) = self.cliff {
+                if cliff != 0 {
+                    return Err(StdError::generic_err("Vesting must be > 0"));
+                }
+            }
+
+            Ok(())
+        }
+    }
+
+    impl From<VestingInfoRegistration> for VestingInfo {
+        fn from(value: VestingInfoRegistration) -> Self {
+            VestingInfo {
+                cliff: value.cliff,
+                vesting: value.vesting,
+                claimed: Uint128::zero(),
+            }
+        }
+    }
+
+    #[cw_serde]
+    pub enum OtcItemInfo {
         Token { denom: String, amount: Uint128 },
         Cw20 { contract: Addr, amount: Uint128 },
         Cw721 { contract: Addr, token_id: String },
     }
 
-    impl OtcItem {
+    impl OtcItemInfo {
         pub fn validate(&self, deps: Deps) -> StdResult<()> {
             match self {
-                OtcItem::Token { .. } => Ok(()),
-                OtcItem::Cw20 { contract, .. } => {
+                OtcItemInfo::Token { .. } => Ok(()),
+                OtcItemInfo::Cw20 { contract, .. } => {
                     contract.to_string().into_addr(deps.api).map(|_| ())
                 }
-                OtcItem::Cw721 { contract, .. } => {
+                OtcItemInfo::Cw721 { contract, .. } => {
                     contract.to_string().into_addr(deps.api).map(|_| ())
                 }
+            }
+        }
+
+        pub fn get_amount(&self) -> Uint128 {
+            match self {
+                OtcItemInfo::Token { amount, .. } => *amount,
+                OtcItemInfo::Cw20 { amount, .. } => *amount,
+                OtcItemInfo::Cw721 { .. } => Uint128::one(),
+            }
+        }
+
+        pub fn build_send_msg(
+            &self,
+            env: &Env,
+            sender: &Addr,
+            to: &Addr,
+            override_amount: Option<Uint128>,
+        ) -> StdResult<CosmosMsg> {
+            if let Some(override_amount) = override_amount {
+                if override_amount == Uint128::zero() {
+                    return Err(StdError::generic_err("Invalid 0 amount"));
+                }
+            }
+            match self {
+                OtcItemInfo::Token { denom, amount } => {
+                    if env.contract.address != sender {
+                        return Err(StdError::generic_err(
+                            "Sender for native token must be the contract itself",
+                        ));
+                    }
+
+                    Ok(BankMsg::Send {
+                        to_address: to.to_string(),
+                        amount: vec![Coin::new(override_amount.unwrap_or(*amount).u128(), denom)],
+                    }
+                    .into())
+                }
+                OtcItemInfo::Cw20 { contract, amount } => Ok(WasmMsg::build_execute(
+                    contract,
+                    if env.contract.address == sender {
+                        cw20::Cw20ExecuteMsg::Transfer {
+                            recipient: to.to_string(),
+                            amount: override_amount.unwrap_or(*amount).to_owned(),
+                        }
+                    } else {
+                        cw20::Cw20ExecuteMsg::TransferFrom {
+                            owner: sender.to_string(),
+                            recipient: to.to_string(),
+                            amount: override_amount.unwrap_or(*amount).to_owned(),
+                        }
+                    },
+                    vec![],
+                )?
+                .into()),
+                OtcItemInfo::Cw721 { contract, token_id } => Ok(WasmMsg::build_execute(
+                    contract,
+                    cw721::Cw721ExecuteMsg::TransferNft {
+                        recipient: to.to_string(),
+                        token_id: token_id.to_owned(),
+                    },
+                    vec![],
+                )?
+                .into()),
             }
         }
     }
@@ -147,7 +334,8 @@ pub mod definitions {
         pub dealer: Option<Addr>,
         pub offer: Vec<OtcItem>,
         pub ask: Vec<OtcItem>,
-        pub expiration_time: Option<u64>,
+        pub creation_time: u64,
+        pub status: OtcPositionStatus,
     }
 
     impl OtcPosition {
@@ -164,6 +352,7 @@ pub mod definitions {
         }
         pub fn from_create_otc_msg(
             deps: Deps,
+            env: &Env,
             msg: CreateOtcMsg,
             id: u64,
             owner: Addr,
@@ -172,84 +361,78 @@ pub mod definitions {
                 id,
                 owner,
                 dealer: msg.dealer.map(|val| val.into_addr(deps.api)).transpose()?,
-                offer: msg.offer,
-                ask: msg.ask,
-                expiration_time: msg.expiration_time,
+                offer: msg.offer.into_iter().map(|val| val.into()).collect(),
+                ask: msg.ask.into_iter().map(|val| val.into()).collect(),
+                creation_time: env.block.time.seconds(),
+                status: OtcPositionStatus::Pending,
             })
+        }
+
+        pub fn active(&mut self, env: &Env, dealer: &Addr) -> StdResult<()> {
+            if let Some(saved_dealer) = &self.dealer {
+                if saved_dealer != dealer {
+                    return Err(StdError::generic_err("Unauthorized"));
+                }
+            } else {
+                self.dealer = Some(dealer.clone())
+            };
+
+            match self.status {
+                OtcPositionStatus::Pending => {
+                    self.status = OtcPositionStatus::Vesting(env.block.time.seconds())
+                }
+                _ => return Err(StdError::generic_err("Active require status in Pending")),
+            }
+
+            Ok(())
+        }
+
+        pub fn try_close(&mut self, env: &Env) -> StdResult<()> {
+            if let OtcPositionStatus::Vesting(..) = self.status {
+                let all_items: Vec<OtcItem> = self
+                    .ask
+                    .clone()
+                    .into_iter()
+                    .chain(self.offer.clone().into_iter())
+                    .collect();
+
+                for item in all_items {
+                    if let Some(vesting_info) = item.vesting_info {
+                        if vesting_info.claimed != item.item_info.get_amount() {
+                            return Ok(());
+                        }
+                    }
+                }
+
+                self.status = OtcPositionStatus::Executed(env.block.time.seconds())
+            }
+
+            match self.status {
+                OtcPositionStatus::Vesting(..) => {}
+                _ => return Err(StdError::generic_err("Try_close require status in Vesting")),
+            }
+
+            Ok(())
         }
     }
 
-    pub trait OtcItemsChecker {
-        fn gather_items(
-            &self,
-            to: Addr,
-            sender: Addr,
-            funds: Option<Vec<Coin>>,
-        ) -> StdResult<(Vec<CosmosMsg>, Vec<Coin>)>;
+    #[cw_serde]
+    pub enum OtcPositionStatus {
+        Pending,
+        Vesting(u64),
+        Executed(u64),
     }
 
-    impl OtcItemsChecker for Vec<OtcItem> {
-        fn gather_items(
-            &self,
-            to: Addr,
-            sender: Addr,
-            funds: Option<Vec<Coin>>,
-        ) -> StdResult<(Vec<CosmosMsg>, Vec<Coin>)> {
-            let mut coins = if let Some(funds) = &funds {
-                rhaki_cw_plus::coin::vec_coins_to_hashmap(funds.clone())?
-            } else {
-                HashMap::default()
-            };
-
-            let mut msgs: Vec<CosmosMsg> = vec![];
-            for item in self {
-                match item {
-                    OtcItem::Token { denom, amount } => {
-                        if funds.is_some() {
-                            let available_amount = coins.get(denom).ok_or(
-                                StdError::generic_err(format!("Coin not received {denom}")),
-                            )?;
-
-                            if amount > available_amount {
-                                return Err(StdError::generic_err(format!("Amount received for {denom} is to low: expected: {amount}, received: {amount}")));
-                            }
-
-                            coins.insert(denom.clone(), available_amount - amount);
-                        }
-                    }
-                    OtcItem::Cw20 { contract, amount } => msgs.push(
-                        WasmMsg::build_execute(
-                            contract,
-                            cw20::Cw20ExecuteMsg::TransferFrom {
-                                owner: sender.to_string(),
-                                recipient: to.to_string(),
-                                amount: amount.to_owned(),
-                            },
-                            vec![],
-                        )?
-                        .into(),
-                    ),
-                    OtcItem::Cw721 { contract, token_id } => msgs.push(
-                        WasmMsg::build_execute(
-                            contract,
-                            cw721::Cw721ExecuteMsg::TransferNft {
-                                recipient: to.to_string(),
-                                token_id: token_id.to_owned(),
-                            },
-                            vec![],
-                        )?
-                        .into(),
-                    ),
-                }
+    impl OtcPositionStatus {
+        pub fn get_vesting_start(&self) -> StdResult<u64> {
+            match self {
+                OtcPositionStatus::Vesting(val) => Ok(*val),
+                _ => Err(StdError::generic_err("OtcPositionStatus is not vesting")),
             }
+        }
 
-            Ok((
-                msgs,
-                coins
-                    .into_iter()
-                    .map(|(denom, amount)| Coin::new(amount.u128(), denom))
-                    .collect(),
-            ))
+        pub fn is_in_pending(&self) -> bool {
+            matches!(self, OtcPositionStatus::Pending)
         }
     }
 }

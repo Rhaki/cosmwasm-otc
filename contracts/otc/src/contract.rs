@@ -7,7 +7,7 @@ use cosmwasm_otc_pkg::otc::{
 use rhaki_cw_plus::traits::{IntoAddr, IntoBinaryResult};
 
 use crate::{
-    execute::{run_cancel_otc, run_create_otc, run_execute_otc},
+    execute::{run_cancel_otc, run_claim_otc, run_create_otc, run_execute_otc},
     query::{
         qy_active_position, qy_active_positions, qy_active_positions_by_dealer,
         qy_active_positions_by_owner, qy_executed_position, qy_executed_positions,
@@ -42,6 +42,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> C
     match msg {
         ExecuteMsg::CreateOtc(msg) => run_create_otc(deps, env, info, msg),
         ExecuteMsg::ExecuteOtc(msg) => run_execute_otc(deps, env, info, msg),
+        ExecuteMsg::ClaimOtc(msg) => run_claim_otc(deps, env, info, msg),
         ExecuteMsg::CancelOtc(msg) => run_cancel_otc(deps, env, info, msg),
     }
 }

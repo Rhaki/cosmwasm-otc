@@ -1,6 +1,6 @@
 [workspace]
 # let members inline
-members          = ["package", "contracts/otc"]
+members          = ["package", "contracts/otc", "tests"]
 
 [workspace.package]
 version          = "0.1.0"

@@ -1,13 +1,14 @@
 use cosmwasm_otc_pkg::otc::{
-    definitions::{OtcItemsChecker, OtcPosition},
-    msgs::{CancelOtcMsg, CreateOtcMsg, ExecuteOtcMsg},
+    definitions::OtcPosition,
+    msgs::{CancelOtcMsg, ClaimOtcMsg, CreateOtcMsg, ExecuteOtcMsg},
 };
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response};
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError};
 use rhaki_cw_plus::traits::IntoAddr;
 
 use crate::{
+    functions::{cancel_otc, collect_otc_items, send_fee, send_otc_items, try_close_position},
     response::{ContractError, ContractResponse},
-    state::{active_positions, execute_positions, CONFIG},
+    state::{active_positions, CONFIG},
 };
 
 pub fn run_create_otc(
@@ -21,6 +22,7 @@ pub fn run_create_otc(
 
     let position = OtcPosition::from_create_otc_msg(
         deps.as_ref(),
+        &env,
         msg,
         config.counter_otc,
         info.sender.clone(),
@@ -28,15 +30,9 @@ pub fn run_create_otc(
     position.validate(deps.as_ref())?;
 
     let (msgs_deposit, remaining_coins) =
-        position
-            .ask
-            .gather_items(env.contract.address, info.sender.clone(), Some(info.funds))?;
+        collect_otc_items(&env, &position.ask, info.sender, info.funds)?;
 
-    let (msgs_fee, _) = config.fee.gather_items(
-        config.fee_collector.clone(),
-        info.sender,
-        Some(remaining_coins),
-    )?;
+    let msgs_fee = send_fee(&env, &config.fee, &config.fee_collector, remaining_coins)?;
 
     CONFIG.save(deps.storage, &config)?;
 
@@ -59,40 +55,63 @@ pub fn run_execute_otc(
     info: MessageInfo,
     msg: ExecuteOtcMsg,
 ) -> ContractResponse {
-    let position = active_positions().load(deps.storage, msg.id)?;
+    let mut position = active_positions().load(deps.storage, msg.id)?;
+    position.active(&env, &info.sender)?;
+
     let config = CONFIG.load(deps.storage)?;
 
-    if let Some(dealer) = position.dealer.clone() {
-        if dealer != info.sender {
-            return Err(ContractError::Unauthorized {});
-        }
-    }
+    let (msgs_deposit, remaining_coins) =
+        collect_otc_items(&env, &position.ask, info.sender, info.funds)?;
 
-    let (msgs_to_owner, remaining_funds) = position.offer.gather_items(
-        position.owner.clone(),
-        info.sender.clone(),
-        Some(info.funds),
+    let msgs_fee = send_fee(&env, &config.fee, &config.fee_collector, remaining_coins)?;
+
+    let msgs_to_owner = send_otc_items(&env, &mut position.ask, &position.status, &position.owner)?;
+    let msgs_to_dealer = send_otc_items(
+        &env,
+        &mut position.offer,
+        &position.status,
+        &position.dealer.clone().unwrap(),
     )?;
 
-    let (msg_fee, _) = config.fee.gather_items(
-        config.fee_collector,
-        info.sender.clone(),
-        Some(remaining_funds),
-    )?;
-
-    let (msg_to_dealer, _) = position
-        .ask
-        .gather_items(info.sender, env.contract.address, None)?;
-
-    active_positions().remove(deps.storage, msg.id)?;
-    execute_positions().save(deps.storage, msg.id, &position)?;
+    let attrs_close = try_close_position(deps, &env, &mut position)?;
 
     Ok(Response::new()
+        .add_messages(msgs_deposit)
+        .add_messages(msgs_fee)
         .add_messages(msgs_to_owner)
-        .add_messages(msg_fee)
-        .add_messages(msg_to_dealer)
+        .add_messages(msgs_to_dealer)
         .add_attribute("action", "execute_otc")
-        .add_attribute("otc_id", msg.id.to_string()))
+        .add_attribute("otc_id", msg.id.to_string())
+        .add_attributes(attrs_close))
+}
+
+pub fn run_claim_otc(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    msg: ClaimOtcMsg,
+) -> ContractResponse {
+    let mut position = active_positions().load(deps.storage, msg.id)?;
+
+    let msgs = if info.sender == position.owner {
+        send_otc_items(&env, &mut position.ask, &position.status, &info.sender)?
+    } else if info.sender == position.dealer.clone().unwrap() {
+        send_otc_items(&env, &mut position.offer, &position.status, &info.sender)?
+    } else {
+        return Err(ContractError::Unauthorized {});
+    };
+
+    if msgs.is_empty() {
+        return Err(StdError::generic_err("Nothing to claim").into());
+    }
+
+    let attrs_close = try_close_position(deps, &env, &mut position)?;
+
+    Ok(Response::new()
+        .add_messages(msgs)
+        .add_attribute("action", "claim")
+        .add_attribute("id", msg.id.to_string())
+        .add_attributes(attrs_close))
 }
 
 pub fn run_cancel_otc(
@@ -107,14 +126,15 @@ pub fn run_cancel_otc(
         return Err(ContractError::Unauthorized {});
     }
 
-    let (msgs, _) = position
-        .offer
-        .gather_items(info.sender, env.contract.address, None)?;
+    if !position.status.is_in_pending() {
+        return Err(StdError::generic_err("Can't cancel a position non in pending status").into());
+    }
+    let msgs_to_owner = cancel_otc(&env, &position)?;
 
     active_positions().remove(deps.storage, msg.id)?;
 
     Ok(Response::new()
-        .add_messages(msgs)
+        .add_messages(msgs_to_owner)
         .add_attribute("action", "cancel_otc")
         .add_attribute("id", msg.id.to_string()))
 }
