@@ -1,5 +1,5 @@
 [package]
-name             = "cosmwasm-ootc"
+name             = "cosmwasm-otc"
 version          = { workspace = true }
 authors          = { workspace = true }
 edition          = { workspace = true }
@@ -32,7 +32,7 @@ schemars         = { workspace = true }
 serde            = { workspace = true }
 thiserror        = { workspace = true }
 rhaki-cw-plus    = { workspace = true }
-cosmwasm_otc-pkg = { workspace = true }
+cosmwasm-otc-pkg = { workspace = true }
 
 [dev-dependencies]
 cw-multi-test    = { workspace = true }

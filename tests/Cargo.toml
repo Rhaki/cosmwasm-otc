@@ -12,3 +12,12 @@ cw20             = { workspace = true }
 cw721            = { workspace = true }
 rhaki-cw-plus    = { workspace = true }
 cw-multi-test    = { workspace = true }
+cosmwasm-otc-pkg = { workspace = true }
+cosmwasm-otc     = { workspace = true }
+anyhow           = "1.0.75"
+cw20-base        = "1.1.1"
+cw721-base       = {version = "0.18.0", features = ["library"]}
+
+schemars         = { workspace = true }
+serde            = { version = "1.0.145", default-features = false, features = ["derive"] }
+

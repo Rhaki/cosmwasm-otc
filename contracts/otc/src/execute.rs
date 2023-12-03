@@ -30,7 +30,7 @@ pub fn run_create_otc(
     position.validate(deps.as_ref())?;
 
     let (msgs_deposit, remaining_coins) =
-        collect_otc_items(&env, &position.ask, info.sender, info.funds)?;
+        collect_otc_items(&env, &position.offer, info.sender, info.funds)?;
 
     let msgs_fee = send_fee(&env, &config.fee, &config.fee_collector, remaining_coins)?;
 
