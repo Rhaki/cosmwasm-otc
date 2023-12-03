@@ -1,9 +1,9 @@
 use cosmwasm_otc_pkg::otc::{
-    definitions::{OtcItemInfo, OtcPosition},
-    msgs::{CreateOtcMsg, OtcItemRegistration},
+    definitions::{OtcItem, OtcItemInfo, OtcPosition},
+    msgs::{CreateOtcMsg, ExecuteOtcMsg, OtcItemRegistration},
 };
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Coin, Empty, Uint128};
+use cosmwasm_std::{Addr, Coin, Empty, StdResult, Uint128};
 use cw20::{BalanceResponse, Cw20Coin};
 use cw721::OwnerOfResponse;
 use cw_multi_test::{App, AppResponse, Executor};
@@ -112,6 +112,19 @@ fn native_funds_from_otc_item_registration(items: &Vec<OtcItemRegistration>) -> 
         .into_iter()
         .filter_map(|item| {
             if let OtcItemInfo::Token { denom, amount } = &item.info {
+                Some(Coin::new(amount.u128(), denom))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn native_funds_from_otc_item(items: &Vec<OtcItem>) -> Vec<Coin> {
+    items
+        .into_iter()
+        .filter_map(|item| {
+            if let OtcItemInfo::Token { denom, amount } = &item.item_info {
                 Some(Coin::new(amount.u128(), denom))
             } else {
                 None
@@ -294,15 +307,42 @@ pub fn run_create_otc(
     )
 }
 
+pub fn run_execute_otc(
+    app: &mut App,
+    def: &mut Def,
+    sender: &str,
+    id: u64,
+    mut extra_coin: Vec<Coin>,
+) -> AppResult {
+    let position = qy_otc_active_position(app, def, id).unwrap();
+
+    let mut coins = native_funds_from_otc_item(&position.ask);
+
+    coins.append(&mut extra_coin);
+
+    let coins = coins.merge();
+    app.execute_contract(
+        sender.into_unchecked_addr(),
+        def.addr_otc.clone().unwrap(),
+        &cosmwasm_otc_pkg::otc::msgs::ExecuteMsg::ExecuteOtc(ExecuteOtcMsg { id }),
+        &coins,
+    )
+}
+
 // queries
 
-pub fn qy_otc_position(app: &App, def: &Def, id: u64) -> OtcPosition {
-    app.wrap()
-        .query_wasm_smart(
-            def.addr_otc.clone().unwrap(),
-            &cosmwasm_otc_pkg::otc::msgs::QueryMsg::ActivePosition { id },
-        )
-        .unwrap()
+pub fn qy_otc_active_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
+    app.wrap().query_wasm_smart(
+        def.addr_otc.clone().unwrap(),
+        &cosmwasm_otc_pkg::otc::msgs::QueryMsg::ActivePosition { id },
+    )
+}
+
+pub fn qy_otc_executed_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
+    app.wrap().query_wasm_smart(
+        def.addr_otc.clone().unwrap(),
+        &cosmwasm_otc_pkg::otc::msgs::QueryMsg::ExecutedPosition { id },
+    )
 }
 
 pub fn qy_balance_native(app: &App, denom: &str, user: &str) -> Uint128 {

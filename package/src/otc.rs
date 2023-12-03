@@ -405,11 +405,8 @@ pub mod definitions {
                 }
 
                 self.status = OtcPositionStatus::Executed(env.block.time.seconds())
-            }
-
-            match self.status {
-                OtcPositionStatus::Vesting(..) => {}
-                _ => return Err(StdError::generic_err("Try_close require status in Vesting")),
+            } else {
+                return Err(StdError::generic_err("Try_close require status in Vesting"));
             }
 
             Ok(())
