@@ -1,7 +1,7 @@
-use cosmwasm_otc_pkg::otc::definitions::{OtcItem, OtcItemInfo, OtcPosition, OtcPositionStatus};
 use cosmwasm_std::{
     attr, Addr, Attribute, Coin, CosmosMsg, DepsMut, Env, StdError, StdResult, Uint128,
 };
+use otcer_pkg::otc::definitions::{OtcItem, OtcItemInfo, OtcPosition, OtcPositionStatus};
 
 use crate::state::{active_positions, execute_positions};
 

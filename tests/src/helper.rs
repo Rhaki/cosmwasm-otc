@@ -1,12 +1,12 @@
-use cosmwasm_otc_pkg::otc::{
-    definitions::{OtcItem, OtcItemInfo, OtcPosition},
-    msgs::{CreateOtcMsg, ExecuteOtcMsg, OtcItemRegistration},
-};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Coin, Empty, StdResult, Uint128};
 use cw20::{BalanceResponse, Cw20Coin};
 use cw721::OwnerOfResponse;
 use cw_multi_test::{App, AppResponse, Executor};
+use otcer_pkg::otc::{
+    definitions::{OtcItem, OtcItemInfo, OtcPosition},
+    msgs::{CreateOtcMsg, ExecuteOtcMsg, OtcItemRegistration},
+};
 use rhaki_cw_plus::{
     math::IntoUint,
     serde_value::{json, StdValue as Value},
@@ -67,9 +67,9 @@ pub fn startup(def: &mut Def) -> App {
     let mut app = App::default();
 
     let otc_code_id = app.store_code(create_code(
-        cosmwasm_otc::contract::instantiate,
-        cosmwasm_otc::contract::execute,
-        cosmwasm_otc::contract::query,
+        otcer::contract::instantiate,
+        otcer::contract::execute,
+        otcer::contract::query,
     ));
 
     let cw20_code_id = app.store_code(create_code(
@@ -91,7 +91,7 @@ pub fn startup(def: &mut Def) -> App {
         .instantiate_contract(
             otc_code_id,
             def.owner.into_unchecked_addr(),
-            &cosmwasm_otc_pkg::otc::msgs::InstantiateMsg {
+            &otcer_pkg::otc::msgs::InstantiateMsg {
                 owner: def.owner.to_string(),
                 fee: def.otc_fee.clone(),
                 fee_collector: def.fee_collector.to_string(),
@@ -298,7 +298,7 @@ pub fn run_create_otc(
     app.execute_contract(
         creator.into_unchecked_addr(),
         def.addr_otc.clone().unwrap(),
-        &cosmwasm_otc_pkg::otc::msgs::ExecuteMsg::CreateOtc(CreateOtcMsg {
+        &otcer_pkg::otc::msgs::ExecuteMsg::CreateOtc(CreateOtcMsg {
             dealer: Some(dealer.to_string()),
             offer: offer.clone(),
             ask: ask.clone(),
@@ -324,7 +324,7 @@ pub fn run_execute_otc(
     app.execute_contract(
         sender.into_unchecked_addr(),
         def.addr_otc.clone().unwrap(),
-        &cosmwasm_otc_pkg::otc::msgs::ExecuteMsg::ExecuteOtc(ExecuteOtcMsg { id }),
+        &otcer_pkg::otc::msgs::ExecuteMsg::ExecuteOtc(ExecuteOtcMsg { id }),
         &coins,
     )
 }
@@ -334,14 +334,14 @@ pub fn run_execute_otc(
 pub fn qy_otc_active_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
     app.wrap().query_wasm_smart(
         def.addr_otc.clone().unwrap(),
-        &cosmwasm_otc_pkg::otc::msgs::QueryMsg::ActivePosition { id },
+        &otcer_pkg::otc::msgs::QueryMsg::ActivePosition { id },
     )
 }
 
 pub fn qy_otc_executed_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
     app.wrap().query_wasm_smart(
         def.addr_otc.clone().unwrap(),
-        &cosmwasm_otc_pkg::otc::msgs::QueryMsg::ExecutedPosition { id },
+        &otcer_pkg::otc::msgs::QueryMsg::ExecutedPosition { id },
     )
 }
 

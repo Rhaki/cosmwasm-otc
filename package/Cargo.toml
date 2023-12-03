@@ -1,5 +1,5 @@
 [package]
-name             = "cosmwasm-otc-pkg"
+name             = "otcer-pkg"
 
 version          = { workspace = true }
 authors          = { workspace = true }

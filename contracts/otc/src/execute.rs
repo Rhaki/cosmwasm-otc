@@ -1,8 +1,8 @@
-use cosmwasm_otc_pkg::otc::{
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError};
+use otcer_pkg::otc::{
     definitions::OtcPosition,
     msgs::{CancelOtcMsg, ClaimOtcMsg, CreateOtcMsg, ExecuteOtcMsg},
 };
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError};
 use rhaki_cw_plus::traits::IntoAddr;
 
 use crate::{
