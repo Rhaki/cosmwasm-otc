@@ -1,5 +1,5 @@
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError};
-use otcer_pkg::otc::{
+use otcer_pkg::otcer::{
     definitions::OtcPosition,
     msgs::{CancelOtcMsg, ClaimOtcMsg, CreateOtcMsg, ExecuteOtcMsg},
 };

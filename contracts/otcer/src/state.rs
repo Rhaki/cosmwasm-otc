@@ -1,5 +1,5 @@
 use cw_storage_plus::{index_list, IndexedMap, Item, MultiIndex};
-use otcer_pkg::otc::definitions::{Config, OtcPosition};
+use otcer_pkg::otcer::definitions::{Config, OtcPosition};
 
 pub const CONFIG: Item<Config> = Item::new("config");
 

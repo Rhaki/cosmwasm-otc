@@ -1,6 +1,6 @@
 [workspace]
 # let members inline
-members          = ["package", "contracts/otc", "tests"]
+members          = ["package", "contracts/*", "tests"]
 
 [workspace.package]
 version          = "0.1.0"
@@ -19,7 +19,7 @@ schemars         = "0.8.10"
 serde            = { version = "1.0.145", default-features = false, features = ["derive"] }
 thiserror        = "1.0.31"
 rhaki-cw-plus    = "0.6.12"
-otcer-pkg = { path = "./package", version = "0.1.0"}
-otcer     = { path = "./contracts/otc", version = "0.1.0"}
+otcer-pkg        = { path = "./package", version = "0.1.0"}
+otcer            = { path = "./contracts/otcer", version = "0.1.0"}
 
 cw-multi-test    = "0.16.5"

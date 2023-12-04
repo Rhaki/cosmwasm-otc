@@ -1,5 +1,5 @@
 use cosmwasm_std::{Deps, Order, StdResult};
-use otcer_pkg::otc::definitions::OtcPosition;
+use otcer_pkg::otcer::definitions::OtcPosition;
 
 use crate::state::{active_positions, execute_positions};
 

@@ -1,6 +1,6 @@
 use cosmwasm_std::{entry_point, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
-use otcer_pkg::otc::{
+use otcer_pkg::otcer::{
     definitions::Config,
     msgs::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
 };

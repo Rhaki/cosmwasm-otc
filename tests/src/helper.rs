@@ -3,7 +3,7 @@ use cosmwasm_std::{Addr, Coin, Empty, StdResult, Uint128};
 use cw20::{BalanceResponse, Cw20Coin};
 use cw721::OwnerOfResponse;
 use cw_multi_test::{App, AppResponse, Executor};
-use otcer_pkg::otc::{
+use otcer_pkg::otcer::{
     definitions::{OtcItem, OtcItemInfo, OtcPosition},
     msgs::{CreateOtcMsg, ExecuteOtcMsg, OtcItemRegistration},
 };
@@ -91,7 +91,7 @@ pub fn startup(def: &mut Def) -> App {
         .instantiate_contract(
             otc_code_id,
             def.owner.into_unchecked_addr(),
-            &otcer_pkg::otc::msgs::InstantiateMsg {
+            &otcer_pkg::otcer::msgs::InstantiateMsg {
                 owner: def.owner.to_string(),
                 fee: def.otc_fee.clone(),
                 fee_collector: def.fee_collector.to_string(),
@@ -298,7 +298,7 @@ pub fn run_create_otc(
     app.execute_contract(
         creator.into_unchecked_addr(),
         def.addr_otc.clone().unwrap(),
-        &otcer_pkg::otc::msgs::ExecuteMsg::CreateOtc(CreateOtcMsg {
+        &otcer_pkg::otcer::msgs::ExecuteMsg::CreateOtc(CreateOtcMsg {
             dealer: Some(dealer.to_string()),
             offer: offer.clone(),
             ask: ask.clone(),
@@ -324,7 +324,7 @@ pub fn run_execute_otc(
     app.execute_contract(
         sender.into_unchecked_addr(),
         def.addr_otc.clone().unwrap(),
-        &otcer_pkg::otc::msgs::ExecuteMsg::ExecuteOtc(ExecuteOtcMsg { id }),
+        &otcer_pkg::otcer::msgs::ExecuteMsg::ExecuteOtc(ExecuteOtcMsg { id }),
         &coins,
     )
 }
@@ -334,14 +334,14 @@ pub fn run_execute_otc(
 pub fn qy_otc_active_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
     app.wrap().query_wasm_smart(
         def.addr_otc.clone().unwrap(),
-        &otcer_pkg::otc::msgs::QueryMsg::ActivePosition { id },
+        &otcer_pkg::otcer::msgs::QueryMsg::ActivePosition { id },
     )
 }
 
 pub fn qy_otc_executed_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
     app.wrap().query_wasm_smart(
         def.addr_otc.clone().unwrap(),
-        &otcer_pkg::otc::msgs::QueryMsg::ExecutedPosition { id },
+        &otcer_pkg::otcer::msgs::QueryMsg::ExecutedPosition { id },
     )
 }
 
