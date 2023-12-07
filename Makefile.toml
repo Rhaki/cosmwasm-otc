@@ -90,3 +90,52 @@ dependencies = [
   "generate-all-schemas",
   "rust-optimizer",
 ]
+[tasks.generate-all-schemas]
+script_runner = "@rust"
+script = '''
+use std::fs;
+use std::process::Command;
+
+fn main() -> std::io::Result<()> {
+    fs::remove_dir_all("schemas");
+    fs::create_dir("schemas")?;
+    println!("Done");
+
+    let contracts = vec![
+        "otcer",
+    ];
+
+    for contract in contracts {
+        println!("{}", contract);
+
+        let output = Command::new("cargo")
+            .arg("run")
+            .arg("--package")
+            .arg(contract)
+            .arg("--bin")
+            .arg("schema")
+            .output()
+            .expect("failed to execute process");
+
+        println!("status: {}", output.status);
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+
+        fs::create_dir(format!("schemas/{}", contract))?;
+
+        fs::rename(
+            format!("schema/{}.json", contract),
+            format!("schemas/{}/{}.json", contract, contract),
+        )?;
+
+        fs::rename(
+            format!("schema/raw", ),
+            format!("schemas/{}/raw", contract),
+        )?;
+    }
+
+    fs::remove_dir_all("schema");
+
+    Ok(())
+}
+'''

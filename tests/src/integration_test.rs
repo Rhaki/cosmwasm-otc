@@ -1,4 +1,4 @@
-use otcer_pkg::otc::{definitions::OtcItemInfo, msgs::OtcItemRegistration};
+use otcer_pkg::otcer::{definitions::OtcItemInfo, msgs::OtcItemRegistration};
 
 use crate::helper::{
     create_token, increase_allowance, mint_token, qy_balance_cw20, qy_balance_native,
