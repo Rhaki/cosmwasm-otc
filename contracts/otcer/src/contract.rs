@@ -8,11 +8,7 @@ use rhaki_cw_plus::traits::{IntoAddr, IntoBinaryResult};
 
 use crate::{
     execute::{run_cancel_otc, run_claim_otc, run_create_otc, run_execute_otc},
-    query::{
-        qy_active_position, qy_active_positions, qy_active_positions_by_dealer,
-        qy_active_positions_by_owner, qy_executed_position, qy_executed_positions,
-        qy_executed_positions_by_dealer, qy_executed_positions_by_owner,
-    },
+    query::{qy_position, qy_positions},
     response::ContractResponse,
     state::CONFIG,
 };
@@ -50,38 +46,17 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> C
 #[entry_point]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::ActivePosition { id } => qy_active_position(deps, id).into_binary(),
-        QueryMsg::ExecutedPosition { id } => qy_executed_position(deps, id).into_binary(),
-        QueryMsg::ActivePositions { limit, start_after } => {
-            qy_active_positions(deps, limit, start_after).into_binary()
-        }
-        QueryMsg::ExecutedPositions { limit, start_after } => {
-            qy_executed_positions(deps, limit, start_after).into_binary()
-        }
-        QueryMsg::ActivePositionsByOwner {
-            owner,
+        QueryMsg::Position { id } => qy_position(deps, id).into_binary(),
+        QueryMsg::Positions {
             limit,
             start_after,
-        } => qy_active_positions_by_owner(deps, owner, limit, start_after).into_binary(),
-        QueryMsg::ActrivePositionByDealer {
-            dealer,
-            limit,
-            start_after,
-        } => qy_active_positions_by_dealer(deps, dealer, limit, start_after).into_binary(),
-        QueryMsg::ExecutedPositionsByOwner {
-            owner,
-            limit,
-            start_after,
-        } => qy_executed_positions_by_owner(deps, owner, limit, start_after).into_binary(),
-        QueryMsg::ExecutedPositionBtDealer {
-            dealer,
-            limit,
-            start_after,
-        } => qy_executed_positions_by_dealer(deps, dealer, limit, start_after).into_binary(),
+            filters,
+            order,
+        } => qy_positions(deps, start_after, limit, filters, order).into_binary(),
     }
 }
 
 #[entry_point]
-pub fn migrate(_deps: Deps, _env: Env, _msg: MigrateMsg) -> ContractResponse {
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> ContractResponse {
     Ok(Response::default())
 }

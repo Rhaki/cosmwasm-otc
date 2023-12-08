@@ -12,4 +12,5 @@ cw721              = { workspace = true }
 rhaki-cw-plus      = { workspace = true }
 cosmos-grpc-client = "0.2.4"
 tokio              = { version = "1", features = ["full"] }
-
+cw721-base         = {version = "0.18.0", features = ["library"]}
+cw721-metadata-onchain = "0.15.0"

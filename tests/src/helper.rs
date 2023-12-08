@@ -104,14 +104,14 @@ pub fn startup(def: &mut Def) -> App {
 
     def.addr_otc = Some(otc_addr);
 
-    return app;
+    app
 }
 
-fn native_funds_from_otc_item_registration(items: &Vec<OtcItemRegistration>) -> Vec<Coin> {
+fn native_funds_from_otc_item_registration(items: &[OtcItemRegistration]) -> Vec<Coin> {
     items
-        .into_iter()
+        .iter()
         .filter_map(|item| {
-            if let OtcItemInfo::Token { denom, amount } = &item.info {
+            if let OtcItemInfo::Token { denom, amount } = &item.item_info {
                 Some(Coin::new(amount.u128(), denom))
             } else {
                 None
@@ -120,9 +120,9 @@ fn native_funds_from_otc_item_registration(items: &Vec<OtcItemRegistration>) -> 
         .collect()
 }
 
-fn native_funds_from_otc_item(items: &Vec<OtcItem>) -> Vec<Coin> {
+fn native_funds_from_otc_item(items: &[OtcItem]) -> Vec<Coin> {
     items
-        .into_iter()
+        .iter()
         .filter_map(|item| {
             if let OtcItemInfo::Token { denom, amount } = &item.item_info {
                 Some(Coin::new(amount.u128(), denom))
@@ -143,7 +143,7 @@ pub fn create_token(
     match token_type {
         TokenType::Cw20 => app
             .instantiate_contract(
-                def.code_id_cw20.clone().unwrap(),
+                def.code_id_cw20.unwrap(),
                 def.owner.into_unchecked_addr(),
                 &cw20_base::msg::InstantiateMsg {
                     name: token_name.to_string(),
@@ -170,7 +170,7 @@ pub fn create_token(
         TokenType::Cw721 => {
             let addr = app
                 .instantiate_contract(
-                    def.code_id_cw721.clone().unwrap(),
+                    def.code_id_cw721.unwrap(),
                     def.owner.into_unchecked_addr(),
                     &cw721_base::msg::InstantiateMsg {
                         name: token_name.to_string(),
@@ -184,7 +184,7 @@ pub fn create_token(
                 .unwrap();
 
             for (to, token_id) in initial_balance {
-                mint_token(app, def, &to, (addr.as_str(), token_type.clone()), token_id)
+                mint_token(app, def, to, (addr.as_str(), token_type.clone()), token_id)
             }
 
             addr
@@ -284,12 +284,12 @@ pub fn run_create_otc(
     app: &mut App,
     def: &mut Def,
     creator: &str,
-    dealer: &str,
-    offer: &Vec<OtcItemRegistration>,
-    ask: &Vec<OtcItemRegistration>,
+    executor: &str,
+    offer: &[OtcItemRegistration],
+    ask: &[OtcItemRegistration],
     mut extra_coin: Vec<Coin>,
 ) -> AppResult {
-    let mut coins = native_funds_from_otc_item_registration(&offer);
+    let mut coins = native_funds_from_otc_item_registration(offer);
 
     coins.append(&mut extra_coin);
 
@@ -299,9 +299,9 @@ pub fn run_create_otc(
         creator.into_unchecked_addr(),
         def.addr_otc.clone().unwrap(),
         &otcer_pkg::otcer::msgs::ExecuteMsg::CreateOtc(CreateOtcMsg {
-            dealer: Some(dealer.to_string()),
-            offer: offer.clone(),
-            ask: ask.clone(),
+            executor: Some(executor.to_string()),
+            offer: offer.to_vec(),
+            ask: ask.to_vec(),
         }),
         &coins,
     )
@@ -334,14 +334,14 @@ pub fn run_execute_otc(
 pub fn qy_otc_active_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
     app.wrap().query_wasm_smart(
         def.addr_otc.clone().unwrap(),
-        &otcer_pkg::otcer::msgs::QueryMsg::ActivePosition { id },
+        &otcer_pkg::otcer::msgs::QueryMsg::Position { id },
     )
 }
 
 pub fn qy_otc_executed_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
     app.wrap().query_wasm_smart(
         def.addr_otc.clone().unwrap(),
-        &otcer_pkg::otcer::msgs::QueryMsg::ExecutedPosition { id },
+        &otcer_pkg::otcer::msgs::QueryMsg::Position { id },
     )
 }
 
@@ -374,5 +374,5 @@ pub fn qy_balance_nft(app: &App, addr: &Addr, token_id: &str, user: &str) -> boo
         .unwrap()
         .owner;
 
-    owner == user.to_string()
+    owner == *user
 }

@@ -1,110 +1,114 @@
-use cosmwasm_std::{Deps, Order, StdResult};
-use otcer_pkg::otcer::definitions::OtcPosition;
+use cosmwasm_std::{Deps, Order, StdError, StdResult};
+use otcer_pkg::otcer::{
+    definitions::OtcPosition,
+    msgs::{QueryPositionsFilter, QueryPositionsFilterOrder},
+};
 
-use crate::state::{active_positions, execute_positions};
+use crate::state::positions;
 
-pub fn qy_active_position(deps: Deps, id: u64) -> StdResult<OtcPosition> {
-    active_positions().load(deps.storage, id)
+pub fn qy_position(deps: Deps, id: u64) -> StdResult<OtcPosition> {
+    positions().load(deps.storage, id)
 }
 
-pub fn qy_executed_position(deps: Deps, id: u64) -> StdResult<OtcPosition> {
-    execute_positions().load(deps.storage, id)
-}
-
-pub fn qy_active_positions(
+pub fn qy_positions(
     deps: Deps,
-    limit: Option<u32>,
     start_after: Option<u64>,
-) -> StdResult<Vec<OtcPosition>> {
-    rhaki_cw_plus::storage::multi_index::get_items(
-        deps.storage,
-        active_positions(),
-        Order::Ascending,
-        limit,
-        start_after,
-    )
-    .map(|val| val.into_iter().map(|(_, val)| val).collect())
-}
-
-pub fn qy_executed_positions(
-    deps: Deps,
     limit: Option<u32>,
-    start_after: Option<u64>,
+    filters: Option<QueryPositionsFilter>,
+    order: Option<QueryPositionsFilterOrder>,
 ) -> StdResult<Vec<OtcPosition>> {
-    rhaki_cw_plus::storage::multi_index::get_items(
-        deps.storage,
-        execute_positions(),
-        Order::Ascending,
-        limit,
-        start_after,
-    )
-    .map(|val| val.into_iter().map(|(_, val)| val).collect())
-}
-
-pub fn qy_active_positions_by_owner(
-    deps: Deps,
-    owner: String,
-    limit: Option<u32>,
-    start_after: Option<u64>,
-) -> StdResult<Vec<OtcPosition>> {
-    rhaki_cw_plus::storage::multi_index::get_multi_index_values(
-        deps.storage,
-        owner,
-        active_positions().idx.owner,
-        Order::Ascending,
-        start_after,
-        limit,
-    )
-    .map(|val| val.into_iter().map(|(_, val)| val).collect())
-}
-
-pub fn qy_active_positions_by_dealer(
-    deps: Deps,
-    dealer: String,
-    limit: Option<u32>,
-    start_after: Option<u64>,
-) -> StdResult<Vec<OtcPosition>> {
-    rhaki_cw_plus::storage::multi_index::get_multi_index_values(
-        deps.storage,
-        dealer,
-        active_positions().idx.dealer,
-        Order::Ascending,
-        start_after,
-        limit,
-    )
-    .map(|val| val.into_iter().map(|(_, val)| val).collect())
-}
-
-pub fn qy_executed_positions_by_owner(
-    deps: Deps,
-    owner: String,
-    limit: Option<u32>,
-    start_after: Option<u64>,
-) -> StdResult<Vec<OtcPosition>> {
-    rhaki_cw_plus::storage::multi_index::get_multi_index_values(
-        deps.storage,
-        owner,
-        execute_positions().idx.owner,
-        Order::Ascending,
-        start_after,
-        limit,
-    )
-    .map(|val| val.into_iter().map(|(_, val)| val).collect())
-}
-
-pub fn qy_executed_positions_by_dealer(
-    deps: Deps,
-    dealer: String,
-    limit: Option<u32>,
-    start_after: Option<u64>,
-) -> StdResult<Vec<OtcPosition>> {
-    rhaki_cw_plus::storage::multi_index::get_multi_index_values(
-        deps.storage,
-        dealer,
-        execute_positions().idx.dealer,
-        Order::Ascending,
-        start_after,
-        limit,
-    )
+    let order: Order = order
+        .unwrap_or(QueryPositionsFilterOrder::Descending)
+        .into();
+    if let Some(filters) = filters {
+        match (filters.owner, filters.executor, filters.status) {
+            (None, None, None) => return Err(StdError::generic_err("None filter provided")),
+            // status
+            (None, None, Some(status)) => {
+                rhaki_cw_plus::storage::multi_index::get_multi_index_values(
+                    deps.storage,
+                    status.as_string(),
+                    positions().idx.status,
+                    order,
+                    start_after,
+                    limit,
+                )
+            }
+            // executor
+            (None, Some(executor), None) => {
+                rhaki_cw_plus::storage::multi_index::get_multi_index_values(
+                    deps.storage,
+                    executor,
+                    positions().idx.executor,
+                    order,
+                    start_after,
+                    limit,
+                )
+            }
+            // executor-status
+            (None, Some(executor), Some(status)) => {
+                rhaki_cw_plus::storage::multi_index::get_multi_index_values(
+                    deps.storage,
+                    (executor, status.as_string()),
+                    positions().idx.executor_status,
+                    order,
+                    start_after,
+                    limit,
+                )
+            }
+            // owner
+            (Some(owner), None, None) => {
+                rhaki_cw_plus::storage::multi_index::get_multi_index_values(
+                    deps.storage,
+                    owner,
+                    positions().idx.owner,
+                    order,
+                    start_after,
+                    limit,
+                )
+            }
+            // owner-status
+            (Some(owner), None, Some(status)) => {
+                rhaki_cw_plus::storage::multi_index::get_multi_index_values(
+                    deps.storage,
+                    (owner, status.as_string()),
+                    positions().idx.owner_status,
+                    order,
+                    start_after,
+                    limit,
+                )
+            }
+            // owner-executor
+            (Some(owner), Some(executor), None) => {
+                rhaki_cw_plus::storage::multi_index::get_multi_index_values(
+                    deps.storage,
+                    (owner, executor),
+                    positions().idx.owner_executor,
+                    order,
+                    start_after,
+                    limit,
+                )
+            }
+            // owner-executor-status
+            (Some(owner), Some(executor), Some(status)) => {
+                rhaki_cw_plus::storage::multi_index::get_multi_index_values(
+                    deps.storage,
+                    (owner, executor, status.as_string()),
+                    positions().idx.owner_executor_status,
+                    order,
+                    start_after,
+                    limit,
+                )
+            }
+        }
+    } else {
+        rhaki_cw_plus::storage::multi_index::get_items(
+            deps.storage,
+            positions(),
+            order,
+            limit,
+            start_after,
+        )
+    }
     .map(|val| val.into_iter().map(|(_, val)| val).collect())
 }

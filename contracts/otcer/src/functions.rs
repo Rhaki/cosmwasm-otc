@@ -3,7 +3,7 @@ use cosmwasm_std::{
 };
 use otcer_pkg::otcer::definitions::{OtcItem, OtcItemInfo, OtcPosition, OtcPositionStatus};
 
-use crate::state::{active_positions, execute_positions};
+use crate::state::positions;
 
 pub fn collect_otc_items(
     env: &Env,
@@ -110,21 +110,34 @@ pub fn assert_received_funds(items: &Vec<OtcItemInfo>, funds: Vec<Coin>) -> StdR
         .collect())
 }
 
-pub fn try_close_position(
+pub fn after_action(
     deps: DepsMut,
     env: &Env,
     position: &mut OtcPosition,
 ) -> StdResult<Vec<Attribute>> {
+    let position_pre = position.status.as_string_ref();
+
     position.try_close(env)?;
 
-    if let OtcPositionStatus::Executed(..) = position.status {
-        active_positions().remove(deps.storage, position.id)?;
-        execute_positions().save(deps.storage, position.id, position)?;
-        return Ok(vec![
-            attr("action", "executed_position"),
-            attr("id", position.id.to_string()),
-        ]);
+    let mut attributes: Vec<Attribute> = vec![];
+
+    match position.status {
+        OtcPositionStatus::Pending => {
+            return Err(StdError::generic_err(
+                "Position should be Executed or Vesting",
+            ))
+        }
+        OtcPositionStatus::Vesting(_) | OtcPositionStatus::Executed(_) => {
+            positions().save(deps.storage, position.id, position)?;
+            let position_status_after = position.status.as_string_ref();
+
+            if position_pre != position_status_after {
+                attributes.push(attr("after_action", "position_status_change"));
+                attributes.push(attr("pre_status", position_pre));
+                attributes.push(attr("current_status", position_status_after));
+            }
+        }
     }
 
-    Ok(vec![])
+    Ok(attributes)
 }

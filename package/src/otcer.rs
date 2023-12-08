@@ -1,5 +1,6 @@
 pub mod msgs {
     use cosmwasm_schema::{cw_serde, QueryResponses};
+    use cosmwasm_std::Order;
 
     use super::definitions::{OtcItemInfo, OtcPosition};
 
@@ -20,7 +21,7 @@ pub mod msgs {
 
     #[cw_serde]
     pub struct CreateOtcMsg {
-        pub dealer: Option<String>,
+        pub executor: Option<String>,
         pub offer: Vec<OtcItemRegistration>,
         pub ask: Vec<OtcItemRegistration>,
     }
@@ -44,42 +45,13 @@ pub mod msgs {
     #[derive(QueryResponses)]
     pub enum QueryMsg {
         #[returns(OtcPosition)]
-        ActivePosition { id: u64 },
-        #[returns(OtcPosition)]
-        ExecutedPosition { id: u64 },
+        Position { id: u64 },
         #[returns(Vec<OtcPosition>)]
-        ActivePositions {
+        Positions {
             limit: Option<u32>,
             start_after: Option<u64>,
-        },
-        #[returns(Vec<OtcPosition>)]
-        ExecutedPositions {
-            limit: Option<u32>,
-            start_after: Option<u64>,
-        },
-        #[returns(Vec<OtcPosition>)]
-        ActivePositionsByOwner {
-            owner: String,
-            limit: Option<u32>,
-            start_after: Option<u64>,
-        },
-        #[returns(Vec<OtcPosition>)]
-        ActrivePositionByDealer {
-            dealer: String,
-            limit: Option<u32>,
-            start_after: Option<u64>,
-        },
-        #[returns(Vec<OtcPosition>)]
-        ExecutedPositionsByOwner {
-            owner: String,
-            limit: Option<u32>,
-            start_after: Option<u64>,
-        },
-        #[returns(Vec<OtcPosition>)]
-        ExecutedPositionBtDealer {
-            dealer: String,
-            limit: Option<u32>,
-            start_after: Option<u64>,
+            filters: Option<QueryPositionsFilter>,
+            order: Option<QueryPositionsFilterOrder>,
         },
     }
 
@@ -94,8 +66,47 @@ pub mod msgs {
 
     #[cw_serde]
     pub struct OtcItemRegistration {
-        pub info: OtcItemInfo,
+        pub item_info: OtcItemInfo,
         pub vesting: Option<VestingInfoRegistration>,
+    }
+
+    #[cw_serde]
+    pub struct QueryPositionsFilter {
+        pub owner: Option<String>,
+        pub executor: Option<String>,
+        pub status: Option<QueryPositionsFilterStatus>,
+    }
+
+    #[cw_serde]
+    pub enum QueryPositionsFilterStatus {
+        Vesting,
+        Pending,
+        Executed,
+    }
+
+    impl QueryPositionsFilterStatus {
+        pub fn as_string(&self) -> String {
+            match self {
+                QueryPositionsFilterStatus::Vesting => "vesting".to_string(),
+                QueryPositionsFilterStatus::Pending => "pending".to_string(),
+                QueryPositionsFilterStatus::Executed => "executed".to_string(),
+            }
+        }
+    }
+
+    #[cw_serde]
+    pub enum QueryPositionsFilterOrder {
+        Ascending,
+        Descending,
+    }
+
+    impl From<QueryPositionsFilterOrder> for Order {
+        fn from(val: QueryPositionsFilterOrder) -> Self {
+            match val {
+                QueryPositionsFilterOrder::Ascending => Order::Ascending,
+                QueryPositionsFilterOrder::Descending => Order::Descending,
+            }
+        }
     }
 }
 
@@ -196,7 +207,7 @@ pub mod definitions {
     impl From<OtcItemRegistration> for OtcItem {
         fn from(value: OtcItemRegistration) -> Self {
             OtcItem {
-                item_info: value.info,
+                item_info: value.item_info,
                 vesting_info: value.vesting.map(|val| val.into()),
             }
         }
@@ -218,14 +229,14 @@ pub mod definitions {
             }
 
             if let Some(vesting) = self.vesting {
-                if vesting != 0 {
+                if vesting == 0 {
                     return Err(StdError::generic_err("Vesting must be > 0"));
                 }
             }
 
             if let Some(cliff) = self.cliff {
-                if cliff != 0 {
-                    return Err(StdError::generic_err("Vesting must be > 0"));
+                if cliff == 0 {
+                    return Err(StdError::generic_err("Cliff must be > 0"));
                 }
             }
 
@@ -331,7 +342,7 @@ pub mod definitions {
     pub struct OtcPosition {
         pub id: u64,
         pub owner: Addr,
-        pub dealer: Option<Addr>,
+        pub executor: Option<Addr>,
         pub offer: Vec<OtcItem>,
         pub ask: Vec<OtcItem>,
         pub creation_time: u64,
@@ -340,8 +351,8 @@ pub mod definitions {
 
     impl OtcPosition {
         pub fn validate(&self, deps: Deps) -> StdResult<()> {
-            if let Some(dealer) = &self.dealer {
-                dealer.to_string().into_addr(deps.api)?;
+            if let Some(executor) = &self.executor {
+                executor.to_string().into_addr(deps.api)?;
             }
 
             for item in self.offer.iter().chain(self.ask.iter()) {
@@ -360,7 +371,10 @@ pub mod definitions {
             Ok(OtcPosition {
                 id,
                 owner,
-                dealer: msg.dealer.map(|val| val.into_addr(deps.api)).transpose()?,
+                executor: msg
+                    .executor
+                    .map(|val| val.into_addr(deps.api))
+                    .transpose()?,
                 offer: msg.offer.into_iter().map(|val| val.into()).collect(),
                 ask: msg.ask.into_iter().map(|val| val.into()).collect(),
                 creation_time: env.block.time.seconds(),
@@ -368,13 +382,13 @@ pub mod definitions {
             })
         }
 
-        pub fn active(&mut self, env: &Env, dealer: &Addr) -> StdResult<()> {
-            if let Some(saved_dealer) = &self.dealer {
-                if saved_dealer != dealer {
+        pub fn active(&mut self, env: &Env, executor: &Addr) -> StdResult<()> {
+            if let Some(saved_executor) = &self.executor {
+                if saved_executor != executor {
                     return Err(StdError::generic_err("Unauthorized"));
                 }
             } else {
-                self.dealer = Some(dealer.clone())
+                self.executor = Some(executor.clone())
             };
 
             match self.status {
@@ -430,6 +444,14 @@ pub mod definitions {
 
         pub fn is_in_pending(&self) -> bool {
             matches!(self, OtcPositionStatus::Pending)
+        }
+
+        pub fn as_string_ref(&self) -> String {
+            match self {
+                OtcPositionStatus::Pending => "pending".to_string(),
+                OtcPositionStatus::Vesting(_) => "vesting".to_string(),
+                OtcPositionStatus::Executed(_) => "executed".to_string(),
+            }
         }
     }
 }
