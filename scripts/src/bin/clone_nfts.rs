@@ -10,6 +10,7 @@ use rhaki_cw_plus::{math::IntoDecimal, traits::IntoBinary};
 
 const GRPC_FROM: &str = "https://terra-grpc.polkachu.com:11790";
 const GRPC_TO: &str = "https://terra-testnet-grpc.polkachu.com:11790";
+// TEST WALLET
 const SEED_PHRASE: &str =
   "client duty genre image fancy image lake rescue doll thunder garage oppose source spare wise yellow moment theme bind alcohol motion tribe gas damage";
 const ADDRESS_TO_CLONE: &str = "terra16ds898j530kn4nnlc7xlj6hcxzqpcxxk4mj8gkcl3vswksu6s3zszs8kp2"; // GP
