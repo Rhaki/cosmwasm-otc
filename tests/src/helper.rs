@@ -1,5 +1,5 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Coin, Empty, StdResult, Uint128};
+use cosmwasm_std::{Addr, Coin, Decimal, Empty, StdResult, Uint128};
 use cw20::{BalanceResponse, Cw20Coin};
 use cw721::OwnerOfResponse;
 use cw_multi_test::{App, AppResponse, Executor};
@@ -8,7 +8,7 @@ use otcer_pkg::otcer::{
     msgs::{CreateOtcMsg, ExecuteOtcMsg, OtcItemRegistration},
 };
 use rhaki_cw_plus::{
-    math::IntoUint,
+    math::{IntoDecimal, IntoUint},
     serde_value::{json, StdValue as Value},
     traits::IntoAddr,
 };
@@ -34,7 +34,7 @@ pub struct Def<'a> {
     pub code_id_cw721: Option<u64>,
     pub fee_collector: &'a str,
     pub owner: &'a str,
-    pub otc_fee: Vec<OtcItemInfo>,
+    pub performance_fee: Decimal,
 }
 
 impl<'a> Def<'a> {
@@ -45,31 +45,30 @@ impl<'a> Def<'a> {
             code_id_cw721: None,
             fee_collector: "fee_collector",
             owner: "owner",
-            otc_fee: vec![OtcItemInfo::Token {
-                denom: "uluna".to_string(),
-                amount: 100_u128.into(),
-            }],
+            performance_fee: "0.05".into_decimal(),
         }
-    }
-
-    pub fn get_native_fee(&self) -> Vec<Coin> {
-        self.otc_fee
-            .iter()
-            .filter_map(|fee| match fee {
-                OtcItemInfo::Token { denom, amount } => Some(Coin::new(amount.u128(), denom)),
-                _ => None,
-            })
-            .collect()
     }
 }
 
 pub fn startup(def: &mut Def) -> App {
     let mut app = App::default();
 
-    let otc_code_id = app.store_code(create_code(
-        otcer::contract::instantiate,
-        otcer::contract::execute,
-        otcer::contract::query,
+    let otcer_core_code_id = app.store_code(create_code(
+        otcer_core::contract::instantiate,
+        otcer_core::contract::execute,
+        otcer_core::contract::query,
+    ));
+
+    let otcer_register_code_id = app.store_code(create_code(
+        otcer_register::contract::instantiate,
+        otcer_register::contract::execute,
+        otcer_register::contract::query,
+    ));
+
+    let otcer_account_code_id = app.store_code(create_code(
+        otcer_vesting_account::contract::instantiate,
+        otcer_vesting_account::contract::execute,
+        otcer_vesting_account::contract::query,
     ));
 
     let cw20_code_id = app.store_code(create_code(
@@ -84,17 +83,26 @@ pub fn startup(def: &mut Def) -> App {
         cw721_value::query,
     ));
 
+    let variable_provider_code_id = app.store_code(create_code(
+        variable_provider::contract::instantiate,
+        variable_provider::contract::execute,
+        variable_provider::contract::query,
+    ));
+
     def.code_id_cw20 = Some(cw20_code_id);
     def.code_id_cw721 = Some(cw721_code_id);
 
     let otc_addr = app
         .instantiate_contract(
-            otc_code_id,
+            otcer_core_code_id,
             def.owner.into_unchecked_addr(),
             &otcer_pkg::otcer::msgs::InstantiateMsg {
                 owner: def.owner.to_string(),
-                fee: def.otc_fee.clone(),
+                performance_fee: def.performance_fee.clone(),
                 fee_collector: def.fee_collector.to_string(),
+                code_id_variable_provider: variable_provider_code_id,
+                code_id_vesting_account: otcer_account_code_id,
+                code_id_register: otcer_register_code_id,
             },
             &[],
             "otc".to_string(),

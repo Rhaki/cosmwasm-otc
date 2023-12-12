@@ -1,4 +1,4 @@
-use cosmwasm_std::{Response, StdError};
+use cosmwasm_std::{Decimal, Response, StdError};
 use thiserror::Error;
 
 pub type ContractResponse = Result<Response, ContractError>;
@@ -9,5 +9,11 @@ pub enum ContractError {
     Std(#[from] StdError),
 
     #[error("Unauthorized")]
-    Unauthorized {},
+    Unauthorized,
+
+    #[error("Invalid performance fee: {fee}")]
+    InvalidPerformanceFee { fee: Decimal },
+
+    #[error("Wrong coins sent during creating or executing otc")]
+    ExtraCoinReceived
 }

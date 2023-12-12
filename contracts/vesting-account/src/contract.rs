@@ -1,6 +1,6 @@
 use cosmwasm_std::{entry_point, Binary, Deps, DepsMut, Env, MessageInfo, StdResult};
 
-use $pkg$::$contract$::msgs::{ExecuteMsg, InstantiateMsg, QueryMsg, MigrateMsg};
+use otcer_pkg::vesting_account::msgs::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 
 use crate::response::ContractResponse;
 

@@ -1,7 +1,11 @@
 use cosmwasm_std::{
-    attr, Addr, Attribute, Coin, CosmosMsg, DepsMut, Env, StdError, StdResult, Uint128,
+    attr, Addr, Attribute, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, StdError, StdResult,
+    Uint128,
 };
-use otcer_pkg::otcer::definitions::{OtcItem, OtcItemInfo, OtcPosition, OtcPositionStatus};
+use otcer_pkg::{
+    otcer::definitions::{OtcItem, OtcItemInfo, OtcPosition, OtcPositionStatus},
+    variable_provider::vp_get_fee_and_collector,
+};
 
 use crate::state::positions;
 
@@ -52,13 +56,36 @@ pub fn send_otc_items(
 }
 
 pub fn send_fee(
+    deps: Deps,
     env: &Env,
-    items_info: &Vec<OtcItemInfo>,
-    fee_collector: &Addr,
-    funds: Vec<Coin>,
+    items_info: &mut Vec<OtcItem>,
+    vp_addr: &Addr,
 ) -> StdResult<Vec<CosmosMsg>> {
-    assert_received_funds(items_info, funds)?;
-    build_send_otc_info_items(env, items_info, fee_collector)
+    let (fee, collector) = vp_get_fee_and_collector(deps, vp_addr)?;
+
+    if fee > Decimal::zero() {
+        items_info
+            .iter_mut()
+            .filter_map(|val| {
+                let fee_amount = val.item_info.get_elegible_fee_amount() * fee;
+
+                if fee_amount > Uint128::zero() {
+                    val.item_info.subtract_fee_amount(fee_amount).unwrap();
+
+                    Some(val.item_info.build_send_msg(
+                        env,
+                        &env.contract.address,
+                        &collector,
+                        Some(fee_amount),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    } else {
+        Ok(vec![])
+    }
 }
 
 pub fn cancel_otc(env: &Env, position: &OtcPosition) -> StdResult<Vec<CosmosMsg>> {

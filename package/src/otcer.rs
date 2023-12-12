@@ -1,14 +1,17 @@
 pub mod msgs {
     use cosmwasm_schema::{cw_serde, QueryResponses};
-    use cosmwasm_std::Order;
+    use cosmwasm_std::{Decimal, Order};
 
     use super::definitions::{OtcItemInfo, OtcPosition};
 
     #[cw_serde]
     pub struct InstantiateMsg {
         pub owner: String,
-        pub fee: Vec<OtcItemInfo>,
+        pub performance_fee: Decimal,
         pub fee_collector: String,
+        pub code_id_variable_provider: u64,
+        pub code_id_vesting_account: u64,
+        pub code_id_register: u64,
     }
 
     #[cw_serde]
@@ -125,27 +128,16 @@ pub mod definitions {
     pub struct Config {
         pub owner: Addr,
         pub counter_otc: u64,
-        pub fee: Vec<OtcItemInfo>,
-        pub fee_collector: Addr,
+        pub variable_provider: Addr,
     }
 
     impl Config {
-        pub fn new(
-            deps: Deps,
-            owner: Addr,
-            fee: Vec<OtcItemInfo>,
-            fee_collector: Addr,
-        ) -> StdResult<Config> {
-            for i in &fee {
-                i.validate(deps)?;
-            }
-
-            Ok(Config {
+        pub fn new(owner: Addr, variable_provider: Addr) -> Config {
+            Config {
                 owner,
                 counter_otc: 0,
-                fee,
-                fee_collector,
-            })
+                variable_provider,
+            }
         }
     }
 
@@ -279,6 +271,28 @@ pub mod definitions {
                 OtcItemInfo::Token { amount, .. } => *amount,
                 OtcItemInfo::Cw20 { amount, .. } => *amount,
                 OtcItemInfo::Cw721 { .. } => Uint128::one(),
+            }
+        }
+
+        pub fn get_elegible_fee_amount(&self) -> Uint128 {
+            match self {
+                OtcItemInfo::Token { amount, .. } => *amount,
+                OtcItemInfo::Cw20 { amount, .. } => *amount,
+                OtcItemInfo::Cw721 { .. } => Uint128::zero(),
+            }
+        }
+
+        pub fn subtract_fee_amount(&mut self, fee: Uint128) -> StdResult<()> {
+            match self {
+                OtcItemInfo::Token { amount, .. } => {
+                    *amount -= fee;
+                    Ok(())
+                }
+                OtcItemInfo::Cw20 { amount, .. } => {
+                    *amount -= fee;
+                    Ok(())
+                }
+                OtcItemInfo::Cw721 { .. } => Ok(()),
             }
         }
 

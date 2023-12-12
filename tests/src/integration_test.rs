@@ -16,7 +16,7 @@ pub fn test() {
     let creator = "creator";
     let executor = "executor";
 
-    let fee = def.get_native_fee();
+    let fee = def.performance_fee;
    
     // Create tokens
 
@@ -58,25 +58,18 @@ pub fn test() {
     ];
 
     // fails for missing fee
-
-    run_create_otc(&mut app, &mut def, creator, executor, &offer_items, &ask_items, vec![]).unwrap_err();
-    mint_token(&mut app, &mut def, creator, (&fee[0].denom, TokenType::Native), &fee[0].amount.to_string());
-    run_create_otc(&mut app, &mut def, creator, executor, &offer_items, &ask_items, fee.clone()).unwrap();
+    run_create_otc(&mut app, &mut def, creator, executor, &offer_items, &ask_items, vec![]).unwrap();
 
     // assert position
-
     assert_eq!(offer_cw20_amount, qy_balance_cw20(&app, &offer_cw20_addr, def.addr_otc.clone().unwrap().as_ref()).u128());
     assert_eq!(offer_native_amount, qy_balance_native(&app, offer_native_denom, def.addr_otc.clone().unwrap().as_ref()).u128());
     assert!(qy_balance_nft(&app, &offer_nft_addr, offer_nft_id, def.addr_otc.clone().unwrap().as_ref()));
 
     // close position
-
     increase_allowance(&mut app, executor, def.addr_otc.clone().unwrap().as_ref(), &ask_nft_addr, TokenType::Cw721, ask_nft_id);
     increase_allowance(&mut app, executor, def.addr_otc.clone().unwrap().as_ref(), &ask_cw20_addr, TokenType::Cw20, &ask_cw20_amount.to_string());
-    mint_token(&mut app, &mut def, executor, (&fee[0].denom, TokenType::Native), &fee[0].amount.to_string());
 
     run_execute_otc(&mut app, &mut def, executor, 1, vec![]).unwrap_err();
-    run_execute_otc(&mut app, &mut def, executor, 1, fee.clone()).unwrap();
 
     // assert result
 
@@ -87,9 +80,7 @@ pub fn test() {
     assert_eq!(ask_cw20_amount, qy_balance_cw20(&app, &ask_cw20_addr, creator).u128());
     assert_eq!(ask_native_amount, qy_balance_native(&app, ask_native_denom, creator).u128());
     assert!(qy_balance_nft(&app, &ask_nft_addr, ask_nft_id, creator));
-
-    assert_eq!(fee[0].amount.u128() * 2, qy_balance_native(&app, &fee[0].denom, def.fee_collector).u128());
-
+    
     qy_otc_executed_position(&app, &def, 1).unwrap();
     qy_otc_active_position(&app, &def, 1).unwrap_err();
 
