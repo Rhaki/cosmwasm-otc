@@ -32,6 +32,8 @@ pub fn run_create_otc(
     let (msgs_deposit, remaining_coins) =
         collect_otc_items(&env, &position.offer, info.sender, info.funds)?;
 
+    println!("{remaining_coins:#?}");
+
     if !remaining_coins.is_empty() {
         return Err(ContractError::ExtraCoinReceived);
     }
@@ -50,7 +52,7 @@ pub fn run_create_otc(
     Ok(Response::new()
         .add_messages(msgs_deposit)
         .add_messages(msgs_fee)
-        .add_attribute("action", "create_orc")
+        .add_attribute("action", "create_otc")
         .add_attribute(
             "executor",
             position

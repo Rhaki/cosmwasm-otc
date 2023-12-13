@@ -1,4 +1,4 @@
-use cosmwasm_std::{entry_point, Binary, Deps, DepsMut, Env, MessageInfo, StdResult};
+use cosmwasm_std::{entry_point, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
 use otcer_pkg::{
     register::msgs::{ExecuteMsg, InstantiateMsg, QueryMsg},
@@ -14,7 +14,7 @@ pub fn instantiate(
     _info: MessageInfo,
     _msg: InstantiateMsg,
 ) -> ContractResponse {
-    unimplemented!()
+    Ok(Response::new())
 }
 
 #[entry_point]

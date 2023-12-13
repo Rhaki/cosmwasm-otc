@@ -2,7 +2,10 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Coin, Decimal, Empty, StdResult, Uint128};
 use cw20::{BalanceResponse, Cw20Coin};
 use cw721::OwnerOfResponse;
-use cw_multi_test::{App, AppResponse, Executor};
+use cw_multi_test::{
+    addons::{MockAddressGenerator, MockApiBech32},
+    no_init, App, AppBuilder, AppResponse, BankKeeper, Executor, WasmKeeper,
+};
 use otcer_pkg::otcer::{
     definitions::{OtcItem, OtcItemInfo, OtcPosition},
     msgs::{CreateOtcMsg, ExecuteOtcMsg, OtcItemRegistration},
@@ -20,6 +23,10 @@ use crate::{
 
 pub type AppResult = Result<AppResponse, anyhow::Error>;
 
+pub type MyApp = App<BankKeeper, MockApiBech32>;
+
+const BENCH32_PREFIX: &str = "terra";
+
 #[cw_serde]
 pub enum TokenType {
     Cw20,
@@ -28,30 +35,45 @@ pub enum TokenType {
 }
 
 #[derive(Debug)]
-pub struct Def<'a> {
+pub struct Def {
     pub addr_otc: Option<Addr>,
     pub code_id_cw20: Option<u64>,
     pub code_id_cw721: Option<u64>,
-    pub fee_collector: &'a str,
-    pub owner: &'a str,
+    pub fee_collector: Addr,
+    pub owner: Addr,
     pub performance_fee: Decimal,
 }
 
-impl<'a> Def<'a> {
+impl Def {
     pub fn new() -> Self {
         Self {
             addr_otc: None,
             code_id_cw20: None,
             code_id_cw721: None,
-            fee_collector: "fee_collector",
-            owner: "owner",
+            fee_collector: generate_addr("fee_collector"),
+            owner: generate_addr("owner"),
             performance_fee: "0.05".into_decimal(),
         }
     }
 }
 
-pub fn startup(def: &mut Def) -> App {
-    let mut app = App::default();
+pub fn build_api() -> MockApiBech32 {
+    MockApiBech32::new(BENCH32_PREFIX)
+}
+
+pub fn build_wasm_keeper() -> WasmKeeper<Empty, Empty> {
+    WasmKeeper::default().with_address_generator(MockAddressGenerator)
+}
+
+pub fn generate_addr(name: &str) -> Addr {
+    build_api().addr_make(name)
+}
+
+pub fn startup(def: &mut Def) -> MyApp {
+    let mut app = AppBuilder::new()
+        .with_api(build_api())
+        .with_wasm(build_wasm_keeper())
+        .build(no_init);
 
     let otcer_core_code_id = app.store_code(create_code(
         otcer_core::contract::instantiate,
@@ -142,7 +164,7 @@ fn native_funds_from_otc_item(items: &[OtcItem]) -> Vec<Coin> {
 }
 
 pub fn create_token(
-    app: &mut App,
+    app: &mut MyApp,
     def: &mut Def,
     token_name: &str,
     token_type: TokenType,
@@ -202,9 +224,9 @@ pub fn create_token(
 }
 
 pub fn mint_token(
-    app: &mut App,
+    app: &mut MyApp,
     def: &mut Def,
-    to: &str,
+    to: impl Into<String>,
     token_info: (&str, TokenType),
     amount: &str,
 ) {
@@ -214,7 +236,7 @@ pub fn mint_token(
                 def.owner.into_unchecked_addr(),
                 token_info.0.into_unchecked_addr(),
                 &cw20_base::msg::ExecuteMsg::Mint {
-                    recipient: to.to_string(),
+                    recipient: to.into(),
                     amount: amount.into_uint128(),
                 },
                 &[],
@@ -224,7 +246,7 @@ pub fn mint_token(
         TokenType::Native => {
             app.sudo(cw_multi_test::SudoMsg::Bank(
                 cw_multi_test::BankSudo::Mint {
-                    to_address: to.to_string(),
+                    to_address: to.into(),
                     amount: vec![Coin::new(amount.into_uint128().into(), token_info.0)],
                 },
             ))
@@ -236,7 +258,7 @@ pub fn mint_token(
                 token_info.0.into_unchecked_addr(),
                 &cw721_base::ExecuteMsg::Mint::<Value, Empty> {
                     token_id: amount.to_string(),
-                    owner: to.to_string(),
+                    owner: to.into(),
                     token_uri: None,
                     extension: json!({}),
                 },
@@ -248,9 +270,9 @@ pub fn mint_token(
 }
 
 pub fn increase_allowance(
-    app: &mut App,
-    sender: &str,
-    to: &str,
+    app: &mut MyApp,
+    sender: impl Into<String>,
+    to: impl Into<String>,
     addr: &Addr,
     token_type: TokenType,
     amount: &str,
@@ -258,10 +280,10 @@ pub fn increase_allowance(
     match token_type {
         TokenType::Cw20 => {
             app.execute_contract(
-                sender.into_unchecked_addr(),
+                sender.into().into_unchecked_addr(),
                 addr.clone(),
                 &cw20::Cw20ExecuteMsg::IncreaseAllowance {
-                    spender: to.to_string(),
+                    spender: to.into(),
                     amount: amount.into_uint128(),
                     expires: None,
                 },
@@ -271,10 +293,10 @@ pub fn increase_allowance(
         }
         TokenType::Cw721 => {
             app.execute_contract(
-                sender.into_unchecked_addr(),
+                sender.into().into_unchecked_addr(),
                 addr.clone(),
                 &cw721_base::ExecuteMsg::Approve::<Value, Empty> {
-                    spender: to.to_string(),
+                    spender: to.into(),
                     token_id: amount.to_string(),
                     expires: None,
                 },
@@ -289,7 +311,7 @@ pub fn increase_allowance(
 // run
 
 pub fn run_create_otc(
-    app: &mut App,
+    app: &mut MyApp,
     def: &mut Def,
     creator: &str,
     executor: &str,
@@ -316,13 +338,13 @@ pub fn run_create_otc(
 }
 
 pub fn run_execute_otc(
-    app: &mut App,
+    app: &mut MyApp,
     def: &mut Def,
     sender: &str,
     id: u64,
     mut extra_coin: Vec<Coin>,
 ) -> AppResult {
-    let position = qy_otc_active_position(app, def, id).unwrap();
+    let position = qy_otc_position(app, def, id).unwrap();
 
     let mut coins = native_funds_from_otc_item(&position.ask);
 
@@ -339,25 +361,20 @@ pub fn run_execute_otc(
 
 // queries
 
-pub fn qy_otc_active_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
+pub fn qy_otc_position(app: &MyApp, def: &Def, id: u64) -> StdResult<OtcPosition> {
     app.wrap().query_wasm_smart(
         def.addr_otc.clone().unwrap(),
         &otcer_pkg::otcer::msgs::QueryMsg::Position { id },
     )
 }
 
-pub fn qy_otc_executed_position(app: &App, def: &Def, id: u64) -> StdResult<OtcPosition> {
-    app.wrap().query_wasm_smart(
-        def.addr_otc.clone().unwrap(),
-        &otcer_pkg::otcer::msgs::QueryMsg::Position { id },
-    )
-}
 
-pub fn qy_balance_native(app: &App, denom: &str, user: &str) -> Uint128 {
+
+pub fn qy_balance_native(app: &MyApp, denom: &str, user: &str) -> Uint128 {
     app.wrap().query_balance(user, denom).unwrap().amount
 }
 
-pub fn qy_balance_cw20(app: &App, addr: &Addr, user: &str) -> Uint128 {
+pub fn qy_balance_cw20(app: &MyApp, addr: &Addr, user: &str) -> Uint128 {
     app.wrap()
         .query_wasm_smart::<BalanceResponse>(
             addr,
@@ -369,7 +386,7 @@ pub fn qy_balance_cw20(app: &App, addr: &Addr, user: &str) -> Uint128 {
         .balance
 }
 
-pub fn qy_balance_nft(app: &App, addr: &Addr, token_id: &str, user: &str) -> bool {
+pub fn qy_balance_nft(app: &MyApp, addr: &Addr, token_id: &str, user: &str) -> bool {
     let owner = app
         .wrap()
         .query_wasm_smart::<OwnerOfResponse>(

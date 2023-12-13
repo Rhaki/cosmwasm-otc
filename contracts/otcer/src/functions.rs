@@ -133,7 +133,13 @@ pub fn assert_received_funds(items: &Vec<OtcItemInfo>, funds: Vec<Coin>) -> StdR
 
     Ok(coins
         .into_iter()
-        .map(|(denom, amount)| Coin::new(amount.u128(), denom))
+        .filter_map(|(denom, amount)| {
+            if !amount.is_zero() {
+                Some(Coin::new(amount.u128(), denom))
+            } else {
+                None
+            }
+        })
         .collect())
 }
 
