@@ -368,8 +368,6 @@ pub fn qy_otc_position(app: &MyApp, def: &Def, id: u64) -> StdResult<OtcPosition
     )
 }
 
-
-
 pub fn qy_balance_native(app: &MyApp, denom: &str, user: &str) -> Uint128 {
     app.wrap().query_balance(user, denom).unwrap().amount
 }

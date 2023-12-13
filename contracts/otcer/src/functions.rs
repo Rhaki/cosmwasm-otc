@@ -58,7 +58,7 @@ pub fn send_otc_items(
 pub fn send_fee(
     deps: Deps,
     env: &Env,
-    items_info: &mut Vec<OtcItem>,
+    items_info: &mut [OtcItem],
     vp_addr: &Addr,
 ) -> StdResult<Vec<CosmosMsg>> {
     let (fee, collector) = vp_get_fee_and_collector(deps, vp_addr)?;

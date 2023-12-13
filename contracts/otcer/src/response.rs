@@ -15,5 +15,5 @@ pub enum ContractError {
     InvalidPerformanceFee { fee: Decimal },
 
     #[error("Wrong coins sent during creating or executing otc")]
-    ExtraCoinReceived
+    ExtraCoinReceived,
 }

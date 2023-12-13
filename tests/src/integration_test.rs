@@ -1,5 +1,7 @@
-use cosmwasm_std::Decimal;
-use otcer_pkg::otcer::{definitions::{OtcItemInfo, OtcItem}, msgs::OtcItemRegistration};
+use otcer_pkg::otcer::{
+    definitions::{OtcItem, OtcItemInfo},
+    msgs::OtcItemRegistration,
+};
 use rhaki_cw_plus::math::IntoUint;
 
 use crate::helper::{
