@@ -54,7 +54,10 @@ pub fn instantiate(
         "register".to_string().into_binary()?,
         Some(msg.owner.to_string()),
         msg.code_id_register,
-        otcer_pkg::register::msgs::InstantiateMsg {},
+        otcer_pkg::register::msgs::InstantiateMsg {
+            owner: msg.owner.clone(),
+            variable_provider: variable_provider_addr.to_string(),
+        },
         vec![],
         "Otcer register".to_string(),
     )?;
