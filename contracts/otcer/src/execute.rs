@@ -20,7 +20,7 @@ pub fn run_create_otc(
     let mut config = CONFIG.load(deps.storage)?;
     config.counter_otc += 1;
 
-    let mut position = OtcPosition::from_create_otc_msg(
+    let position = OtcPosition::from_create_otc_msg(
         deps.as_ref(),
         &env,
         msg,
@@ -32,18 +32,9 @@ pub fn run_create_otc(
     let (msgs_deposit, remaining_coins) =
         collect_otc_items(&env, &position.offer, info.sender, info.funds)?;
 
-    println!("{remaining_coins:#?}");
-
     if !remaining_coins.is_empty() {
         return Err(ContractError::ExtraCoinReceived);
     }
-
-    let msgs_fee = send_fee(
-        deps.as_ref(),
-        &env,
-        &mut position.offer,
-        &config.variable_provider,
-    )?;
 
     CONFIG.save(deps.storage, &config)?;
 
@@ -51,7 +42,6 @@ pub fn run_create_otc(
 
     Ok(Response::new()
         .add_messages(msgs_deposit)
-        .add_messages(msgs_fee)
         .add_attribute("action", "create_otc")
         .add_attribute(
             "executor",
@@ -76,12 +66,20 @@ pub fn run_execute_otc(
     let (msgs_deposit, remaining_coins) =
         collect_otc_items(&env, &position.ask, info.sender, info.funds)?;
 
-    let msgs_fee = send_fee(
+    let msgs_fee_ask = send_fee(
         deps.as_ref(),
         &env,
         &mut position.ask,
         &config.variable_provider,
     )?;
+
+    let msgs_fee_offer = send_fee(
+        deps.as_ref(),
+        &env,
+        &mut position.offer,
+        &config.variable_provider,
+    )?;
+
     if !remaining_coins.is_empty() {
         return Err(ContractError::ExtraCoinReceived);
     }
@@ -98,7 +96,8 @@ pub fn run_execute_otc(
 
     Ok(Response::new()
         .add_messages(msgs_deposit)
-        .add_messages(msgs_fee)
+        .add_messages(msgs_fee_ask)
+        .add_messages(msgs_fee_offer)
         .add_messages(msgs_to_owner)
         .add_messages(msgs_to_executor)
         .add_attribute("action", "execute_otc")

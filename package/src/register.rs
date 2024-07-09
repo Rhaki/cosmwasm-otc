@@ -1,8 +1,6 @@
 pub mod msgs {
     use cosmwasm_schema::{cw_serde, QueryResponses};
-    use rhaki_cw_plus::{cw_asset::AssetInfo, cw_serde_value, serde_value::Value};
-
-    use crate::otcer::definitions::OtcItemInfo;
+    use rhaki_cw_plus::{cw_serde_value, serde_value::Value};
 
     use super::definitions::{InputVariable, RegisterAssetType};
 
@@ -41,7 +39,6 @@ pub mod definitions {
 
     #[cw_serde]
     pub struct Config {
-        pub owner: Addr,
         pub variable_provider: Addr,
     }
 

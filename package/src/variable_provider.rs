@@ -3,6 +3,7 @@ use cosmwasm_std::{Addr, Decimal, Deps, StdResult};
 pub const KEY_FEE_COLLECTOR_ADDR: &str = "fee_collector_addr";
 pub const KEY_PERFORMANCE_FEE: &str = "performance_fee";
 pub const KEY_REGISTER_ADDR: &str = "register_addr";
+pub const KEY_OWNER_ADDR: &str = "owner_addr";
 
 pub fn vp_get_fee_and_collector(deps: Deps, vp_addr: &Addr) -> StdResult<(Decimal, Addr)> {
     let result = variable_provider_pkg::helper::variable_provider_get_variables(
@@ -15,4 +16,13 @@ pub fn vp_get_fee_and_collector(deps: Deps, vp_addr: &Addr) -> StdResult<(Decima
         result.get(KEY_PERFORMANCE_FEE).unwrap().unwrap_decimal()?,
         result.get(KEY_FEE_COLLECTOR_ADDR).unwrap().unwrap_addr()?,
     ))
+}
+
+pub fn vg_get_owner(deps: Deps, vp_addr: &Addr) -> StdResult<Addr> {
+    variable_provider_pkg::helper::variable_provider_get_variable(
+        deps.querier,
+        KEY_OWNER_ADDR,
+        vp_addr,
+    )
+    .map(|val| val.unwrap_addr())?
 }

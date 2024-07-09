@@ -62,6 +62,16 @@ pub fn instantiate(
         "Otcer register".to_string(),
     )?;
 
+    // Register owner
+    let msg_register_owner = WasmMsg::build_execute(
+        &variable_provider_addr,
+        variable_provider_pkg::msgs::ExecuteMsg::RegisterVariable(RegisterVariableMsg {
+            key: otcer_pkg::variable_provider::KEY_OWNER_ADDR.to_string(),
+            value: Variable::Addr(msg.owner.clone().into_addr(deps.api)?),
+        }),
+        vec![],
+    )?;
+
     // Register fee_collector
     let msg_register_fee_collector = WasmMsg::build_execute(
         &variable_provider_addr,
@@ -92,10 +102,7 @@ pub fn instantiate(
         vec![],
     )?;
 
-    let config = Config::new(
-        msg.owner.clone().into_addr(deps.api)?,
-        variable_provider_addr.clone(),
-    );
+    let config = Config::new(variable_provider_addr.clone());
 
     CONFIG.save(deps.storage, &config)?;
 
@@ -108,6 +115,7 @@ pub fn instantiate(
         .add_attribute("performance_fee", msg.performance_fee.to_string())
         .add_message(msg_init_vp)
         .add_message(msg_init_register)
+        .add_message(msg_register_owner)
         .add_message(msg_register_fee_collector)
         .add_message(msg_register_fees)
         .add_message(msg_register_register))

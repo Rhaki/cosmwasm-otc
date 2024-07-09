@@ -126,15 +126,13 @@ pub mod definitions {
 
     #[cw_serde]
     pub struct Config {
-        pub owner: Addr,
         pub counter_otc: u64,
         pub variable_provider: Addr,
     }
 
     impl Config {
-        pub fn new(owner: Addr, variable_provider: Addr) -> Config {
+        pub fn new(variable_provider: Addr) -> Config {
             Config {
-                owner,
                 counter_otc: 0,
                 variable_provider,
             }

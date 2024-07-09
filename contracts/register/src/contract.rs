@@ -19,7 +19,6 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> ContractResponse {
     let config = Config {
-        owner: msg.owner.into_addr(deps.api)?,
         variable_provider: msg.variable_provider.into_addr(deps.api)?,
     };
 
@@ -27,7 +26,6 @@ pub fn instantiate(
 
     Ok(Response::new()
         .add_attribute("action", "instantiate")
-        .add_attribute("owner", config.owner)
         .add_attribute("variable_provider", config.variable_provider))
 }
 

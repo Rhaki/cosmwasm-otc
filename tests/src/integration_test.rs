@@ -12,7 +12,7 @@ use crate::helper::{
 
 #[test]
 #[rustfmt::skip]
-pub fn test() {
+pub fn base_otc_no_vesting() {
     let mut def = Def::new();
 
     let mut app = startup(&mut def);
@@ -61,24 +61,25 @@ pub fn test() {
         OtcItemRegistration { item_info: OtcItemInfo::Cw721 { contract: ask_nft_addr.clone(), token_id: ask_nft_id.to_string() }, vesting: None }
     ];
 
-    // fails for missing fee
     run_create_otc(&mut app, &mut def, &creator, &executor, &offer_items, &ask_items, vec![]).unwrap();
 
     let new_offer_native_amount = offer_native_amount.into_uint128() - offer_native_amount.into_uint128() * fee;
     let new_offer_cw20_amount = offer_cw20_amount.into_uint128() - offer_cw20_amount.into_uint128() * fee;
 
     // assert position
-    assert_eq!(new_offer_cw20_amount, qy_balance_cw20(&app, &offer_cw20_addr, def.addr_otc.clone().unwrap().as_ref()));
-    assert_eq!(new_offer_native_amount, qy_balance_native(&app, offer_native_denom, def.addr_otc.clone().unwrap().as_ref()));
-
-    assert_eq!(offer_cw20_amount.into_uint128() * fee, qy_balance_cw20(&app, &offer_cw20_addr, def.fee_collector.as_str()));
-    assert_eq!(offer_native_amount.into_uint128() * fee, qy_balance_native(&app, offer_native_denom, def.fee_collector.as_str()));
+    assert_eq!(offer_cw20_amount.into_uint128(), qy_balance_cw20(&app, &offer_cw20_addr, def.addr_otc.clone().unwrap().as_ref()));
+    assert_eq!(offer_native_amount.into_uint128(), qy_balance_native(&app, offer_native_denom, def.addr_otc.clone().unwrap().as_ref()));
 
     assert!(qy_balance_nft(&app, &offer_nft_addr, offer_nft_id, def.addr_otc.clone().unwrap().as_ref()));
     assert_eq!(qy_otc_position(&app, &def, 1).unwrap().offer,vec![
-        OtcItem { item_info: OtcItemInfo::Token { denom: offer_native_denom.to_string(), amount: new_offer_native_amount }, vesting_info: None },
-        OtcItem { item_info: OtcItemInfo::Cw20 { contract: offer_cw20_addr.clone(), amount: new_offer_cw20_amount }, vesting_info: None },
+        OtcItem { item_info: OtcItemInfo::Token { denom: offer_native_denom.to_string(), amount: offer_native_amount.into_uint128() }, vesting_info: None },
+        OtcItem { item_info: OtcItemInfo::Cw20 { contract: offer_cw20_addr.clone(), amount: offer_cw20_amount.into_uint128() }, vesting_info: None },
         OtcItem { item_info: OtcItemInfo::Cw721 { contract: offer_nft_addr.clone(), token_id: offer_nft_id.to_string() }, vesting_info: None }
+    ]);
+    assert_eq!(qy_otc_position(&app, &def, 1).unwrap().ask,vec![
+        OtcItem { item_info: OtcItemInfo::Token { denom: ask_native_denom.to_string(), amount: ask_native_amount.into_uint128() }, vesting_info: None },
+        OtcItem { item_info: OtcItemInfo::Cw20 { contract: ask_cw20_addr.clone(), amount: ask_cw20_amount.into_uint128() }, vesting_info: None },
+        OtcItem { item_info: OtcItemInfo::Cw721 { contract: ask_nft_addr.clone(), token_id: ask_nft_id.to_string() }, vesting_info: None }
     ]);
 
     // close position
@@ -101,6 +102,20 @@ pub fn test() {
 
     assert_eq!(ask_cw20_amount.into_uint128() * fee, qy_balance_cw20(&app, &ask_cw20_addr, def.fee_collector.as_str()));
     assert_eq!(ask_native_amount.into_uint128() * fee, qy_balance_native(&app, ask_native_denom, def.fee_collector.as_str()));
+
+    assert_eq!(offer_cw20_amount.into_uint128() * fee, qy_balance_cw20(&app, &offer_cw20_addr, def.fee_collector.as_str()));
+    assert_eq!(offer_native_amount.into_uint128() * fee, qy_balance_native(&app, offer_native_denom, def.fee_collector.as_str()));
+
+    assert_eq!(qy_otc_position(&app, &def, 1).unwrap().offer,vec![
+        OtcItem { item_info: OtcItemInfo::Token { denom: offer_native_denom.to_string(), amount: new_offer_native_amount }, vesting_info: None },
+        OtcItem { item_info: OtcItemInfo::Cw20 { contract: offer_cw20_addr.clone(), amount: new_offer_cw20_amount }, vesting_info: None },
+        OtcItem { item_info: OtcItemInfo::Cw721 { contract: offer_nft_addr.clone(), token_id: offer_nft_id.to_string() }, vesting_info: None }
+    ]);
+    assert_eq!(qy_otc_position(&app, &def, 1).unwrap().ask,vec![
+        OtcItem { item_info: OtcItemInfo::Token { denom: ask_native_denom.to_string(), amount: new_ask_native_amount }, vesting_info: None },
+        OtcItem { item_info: OtcItemInfo::Cw20 { contract: ask_cw20_addr.clone(), amount: new_ask_cw20_amount }, vesting_info: None },
+        OtcItem { item_info: OtcItemInfo::Cw721 { contract: ask_nft_addr.clone(), token_id: ask_nft_id.to_string() }, vesting_info: None }
+    ]);
     
     assert_eq!("executed", qy_otc_position(&app, &def, 1).unwrap().status.as_string_ref());
 
